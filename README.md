@@ -1,13 +1,44 @@
-# Sample Hardhat Project
+# 环境
+```node
+- node v20.19.2
+- npm 10.8.2
+```
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+# 创建项目
+```bash
+mkdir locked-treasury
+cd locked-treasury
+npm init -y
+````
 
-Try running some of the following tasks:
+# hardhat
+```js
+npm install --save-dev hardhat
+npm install --save-dev @nomicfoundation/hardhat-toolbox # --force
+```
 
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat ignition deploy ./ignition/modules/Lock.js
+# 初始化hardhat
+```js
+touch .env
+npx hardhat --init (Create a JavaScript project) // --force
+```
+
+# 安装 OpenZeppelin 库
+```js
+npm install @openzeppelin/contracts // --forces
+```
+
+# 创建合约
+- contract
+
+# 部署
+```js
+npx hardhat run scripts/deploy.js --network sepolia
+```
+
+# 验证合约
+```js
+npm install --save-dev @nomicfoundation/hardhat-verify
+
+npx hardhat verify --network sepolia 0xYourDeployedContractAddress
 ```

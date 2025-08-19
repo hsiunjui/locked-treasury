@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SecureVault DApp</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+  <h2>SecureVault 控制面板</h2>
+
+  <button id="connectButton">连接钱包</button>
+  <p id="account"></p>
+
+  <hr>
+
+  <button id="extendLockButton">延长锁定期</button>
+  <br><br>
+
+  <button id="withdrawETHButton">提取 ETH</button>
+  <br><br>
+
+  <input type="text" id="tokenAddress" placeholder="输入代币合约地址" size="50">
+  <button id="withdrawTokenButton">提取 Token</button>
+
+  <script src="./abi.js"></script>
+
+  <script>
+    // ⚠️ 替换为你部署后的合约地址
+    const contractAddress = "0xbe66961764b7d73da2a226313a47acd474b14943";
+
+    let provider, signer, contract;
+
+    // 连接钱包
+    document.getElementById("connectButton").onclick = async () => {
+      if (window.ethereum) {
+        provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
+        document.getElementById("account").innerText = "已连接: " + await signer.getAddress();
+
+        contract = new ethers.Contract(contractAddress, abi, signer);
+      } else {
+        alert("请安装 MetaMask！");
+      }
+    };
+
+    // 延长锁定期
+    document.getElementById("extendLockButton").onclick = async () => {
+      if (!contract) return alert("请先连接钱包");
+      try {
+        const tx = await contract.extendLock();
+        await tx.wait();
+        alert("锁定期已延长！");
+      } catch (err) {
+        console.error(err);
+        alert("调用失败: " + err.message);
+      }
+    };
+
+    // 提取 ETH
+    document.getElementById("withdrawETHButton").onclick = async () => {
+      if (!contract) return alert("请先连接钱包");
+      try {
+        const tx = await contract.withdrawETH();
+        await tx.wait();
+        alert("ETH 已提取！");
+      } catch (err) {
+        console.error(err);
+        alert("调用失败: " + err.message);
+      }
+    };
+
+    // 提取 Token
+    document.getElementById("withdrawTokenButton").onclick = async () => {
+      if (!contract) return alert("请先连接钱包");
+      const tokenAddr = document.getElementById("tokenAddress").value;
+      if (!ethers.isAddress(tokenAddr)) {
+        return alert("请输入合法的代币合约地址");
+      }
+      try {
+        const tx = await contract.withdrawToken(tokenAddr);
+        await tx.wait();
+        alert("Token 已提取！");
+      } catch (err) {
+        console.error(err);
+        alert("调用失败: " + err.message);
+      }
+    };
+  </script>
+</body>
+</html>

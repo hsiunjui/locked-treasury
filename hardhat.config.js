@@ -1,17 +1,16 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
-/** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.28",
+  solidity: "0.8.20",
   networks: {
+    hardhat: {},
     sepolia: {
-      url: "https://eth-sepolia.g.alchemy.com/public", // 或者Alchemy等RPC
-      accounts: [process.env.PRIVATE_KEY] // 部署用的钱包私钥（注意保护）
+      url: process.env.SEPOLIA_RPC_URL || "",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
     }
   },
   etherscan: {
-    apiKey: {
-      sepolia: "YOUR_ETHERSCAN_API_KEY"
-    }
+    apiKey: process.env.ETHERSCAN_API_KEY
   }
 };
