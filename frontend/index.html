@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>LockedTreasury DApp</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <script src="./abi.js"></script>
+</head>
+<body>
+  <h1>LockedTreasury DApp</h1>
+
+  <button onclick="connectWallet()">连接钱包</button>
+  <p id="account">未连接</p>
+
+  <hr />
+
+  <h2>合约交互</h2>
+  <button onclick="getLockStatus()">查看是否锁定</button>
+  <p id="lockStatus"></p>
+
+  <button onclick="sendETH()">发送 0.02 ETH</button>
+  <p id="txResult"></p>
+
+  <button onclick="withdrawETH()">提取 0.01 ETH（仅部署者, 解锁后）</button>
+  <p id="withdrawResult"></p>
+
+  <h2>LINK 代币操作</h2>
+  <button onclick="depositLinkOnce()">发送 5 LINK</button>
+  <p id="depositLinkResult"></p>
+  <button onclick="withdrawLink()">提取 2 LINK</button>
+  <p id="withdrawLinkResult"></p>
+
+  <script>
+    // import { abi } from './abi.js'
+
+    // 替换成你部署的合约地址
+    const contractAddress = "0x2D7513d1843c62C0F15f13aa8B6dEd2E8f46071A";
+
+    // 替换成合约 ABI
+    const contractABI = abi;
+
+    let web3;
+    let contract;
+    let selectedAccount;
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+        selectedAccount = accounts[0];
+        document.getElementById("account").innerText = "已连接: " + selectedAccount;
+
+        contract = new web3.eth.Contract(contractABI, contractAddress);
+        console.log("Contract loaded:", contract);
+      } else {
+        alert("请安装 MetaMask!");
+      }
+    }
+
+    async function getLockStatus() {
+      if (!contract) return alert("请先连接钱包!");
+      try {
+        const locked = await contract.methods.isLocked().call();
+        const unlockTime = await contract.methods.lockExpiresAt().call();
+        const date = new Date(unlockTime * 1000);
+        document.getElementById("lockStatus").innerText =
+          "锁定中: " + locked + " | 解锁时间: " + date.toLocaleString();
+      } catch (err) {
+        console.error(err);
+        alert("获取锁定状态失败: " + err.message);
+      }
+    }
+
+    async function sendETH() {
+      if (!selectedAccount) return alert("请先连接钱包!");
+      try {
+        console.log("发送 0.01 ETH 到合约地址:", contractAddress);
+        const tx = await web3.eth.sendTransaction({
+          from: selectedAccount,
+          to: contractAddress,
+          value: web3.utils.toWei("0.02", "ether")
+        });
+        console.log("交易成功:", tx);
+        document.getElementById("txResult").innerText = "交易成功: " + tx.transactionHash;
+      } catch (err) {
+        console.error("发送 ETH 出错:", err);
+        document.getElementById("txResult").innerText = "失败: " + err.message;
+      }
+    }
+
+    async function withdrawETH() {
+      if (!contract) return alert("请先连接钱包!");
+      try {
+        const amount = web3.utils.toWei("0.01", "ether");
+        const tx = await contract.methods.withdrawETH(amount).send({ from: selectedAccount });
+        console.log("提现成功:", tx);
+        document.getElementById("withdrawResult").innerText = "提现成功: " + tx.transactionHash;
+      } catch (err) {
+        console.error("提现出错:", err);
+        document.getElementById("withdrawResult").innerText = "失败: " + err.message;
+      }
+    }
+    const linkTokenAddress = "0x779877A7B0D9E8603169DdbD7836e478b4624789"; // 官方 Sepolia LINK
+    // async function depositLink() {
+    //   if (!contract) return alert("请先连接钱包!");
+    //   try {
+    //     // LINK 有 18 位小数，所以 5 LINK = 5 * 10^18
+    //     const amount = web3.utils.toWei("5", "ether");
+    //     const tx = await contract.methods.depositToken(linkTokenAddress, amount).approve(contract.options.address, amount).send({ from: selectedAccount });
+    //     console.log("存入 LINK 成功:", tx);
+    //     document.getElementById("depositLinkResult").innerText = "存入成功: " + tx.transactionHash;
+    //   } catch (err) {
+    //     console.error("提取 LINK 出错:", err);
+    //     document.getElementById("depositLinkResult").innerText = "失败: " + err.message;
+    //   }
+    // }
+
+    const ERC20_ABI = [
+  // approve
+  {
+    "constant": false,
+    "inputs": [
+      { "name": "_spender", "type": "address" },
+      { "name": "_value", "type": "uint256" }
+    ],
+    "name": "approve",
+    "outputs": [{ "name": "", "type": "bool" }],
+    "type": "function"
+  },
+  // allowance
+  {
+    "constant": true,
+    "inputs": [
+      { "name": "_owner", "type": "address" },
+      { "name": "_spender", "type": "address" }
+    ],
+    "name": "allowance",
+    "outputs": [{ "name": "remaining", "type": "uint256" }],
+    "type": "function"
+  }
+];
+
+
+    // 存入 LINK 代币
+    async function depositLinkOnce() {
+        if (!contract || !linkTokenAddress || !selectedAccount) {
+            return alert("请先连接钱包!");
+        }
+
+        try {
+            const linkToken = new web3.eth.Contract(ERC20_ABI, linkTokenAddress);
+            const amount = web3.utils.toWei("5", "ether"); // 5 LINK
+
+            // 1️⃣ 检查 allowance
+            const allowance = await linkToken.methods.allowance(selectedAccount, contract.options.address).call();
+            if (BigInt(allowance) < BigInt(amount)) {
+            console.log("allowance 不够，正在 approve...");
+            const approveTx = await linkToken.methods.approve(contract.options.address, amount).send({ from: selectedAccount });
+            console.log("approve 成功:", approveTx.transactionHash);
+            } else {
+            console.log("allowance 足够，无需 approve");
+            }
+
+            // 2️⃣ 调用 depositToken
+            const depositTx = await contract.methods.depositToken(linkTokenAddress, amount).send({ from: selectedAccount });
+            console.log("存入 LINK 成功:", depositTx.transactionHash);
+            document.getElementById("depositLinkResult").innerText = "存入成功: " + depositTx.transactionHash;
+
+        } catch (err) {
+            console.error("操作出错:", err);
+            document.getElementById("depositLinkResult").innerText = "失败: " + err.message;
+        }
+    }
+
+    async function withdrawLink() {
+      if (!contract) return alert("请先连接钱包!");
+      try {
+        // LINK 有 18 位小数，所以 2 LINK = 2 * 10^18
+        const amount = web3.utils.toWei("2", "ether");
+        const tx = await contract.methods.withdrawToken(linkTokenAddress, amount).send({ from: selectedAccount });
+        console.log("提取 LINK 成功:", tx);
+        document.getElementById("withdrawLinkResult").innerText = "提取成功: " + tx.transactionHash;
+      } catch (err) {
+        console.error("提取 LINK 出错:", err);
+        document.getElementById("withdrawLinkResult").innerText = "失败: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
