@@ -1,20 +1,25 @@
+const { ethers } = require("hardhat");
+
 async function main() {
-  const ONE_HOUR = 60 * 60;
-  const unlockTime = Math.floor(Date.now() / 1000) + ONE_HOUR;
+  const [deployer] = await ethers.getSigners();
 
-  const lockedAmount = ethers.parseEther("0.01"); // 部署时锁定 0.01 ETH
+  console.log("Deploying Vault with account:", deployer.address);
+  // console.log("Account balance:", ethers.utils.formatEther(await deployer.getBalance()), "ETH");
 
-  const Lock = await ethers.getContractFactory("Lock");
-  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
+  // 获取合约工厂
+  const Vault = await ethers.getContractFactory("Vault");
 
-  // ethers v6 等待部署
-  await lock.waitForDeployment();
+  // 部署合约（ethers v6 方式）
+  const vault = await Vault.deploy(); // 部署立即生效
 
-  console.log(`✅ Lock deployed to: ${await lock.getAddress()}`);
-  console.log(`Unlock timestamp: ${unlockTime}`);
+  // 可选：等待区块确认
+  await vault.waitForDeployment();
+
+  console.log("Vault deployed to:", vault.target); // v6 中用 target 获取地址
+  console.log("Vault unlockTime:", (await vault.unlockTime()).toString());
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exitCode = 1;
+  process.exit(1);
 });

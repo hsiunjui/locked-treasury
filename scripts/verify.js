@@ -1,18 +1,27 @@
-async function main() {
-  const contractAddress = process.env.CONTRACT_ADDRESS;
-  const unlockTime = process.env.UNLOCK_TIME;
+require("dotenv").config();
+const hre = require("hardhat");
 
-  if (!contractAddress || !unlockTime) {
-    throw new Error("请先在 .env 中设置 CONTRACT_ADDRESS 和 UNLOCK_TIME");
+async function main() {
+  const vaultAddress = process.env.CONTRACT_ADDRESS;
+  if (!vaultAddress) {
+    console.error("Please set CONTRACT_ADDRESS in your .env file");
+    process.exit(1);
   }
 
-  await hre.run("verify:verify", {
-    address: contractAddress,
-    constructorArguments: [unlockTime]
-  });
+  console.log("Verifying Vault at address:", vaultAddress);
+
+  try {
+    await hre.run("verify:verify", {
+      address: vaultAddress,
+      constructorArguments: [], // Vault 构造函数没有参数
+    });
+    console.log("Verification successful!");
+  } catch (err) {
+    console.error("Verification failed:", err);
+  }
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exitCode = 1;
+  process.exit(1);
 });

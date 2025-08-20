@@ -38,6 +38,11 @@ npx hardhat # javascript project
 - .env
 - scripts/deploy.js
 
+# 编写合约
+```shell
+npm install @openzeppelin/contracts
+```
+
 # 编译合约
 ```shell
 npx hardhat compile
