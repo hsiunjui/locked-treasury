@@ -1,21 +1,17 @@
-const hre = require("hardhat");
-
 async function main() {
-  const [deployer] = await hre.ethers.getSigners();
-  console.log("Deploying with account:", deployer.address);
+  const ONE_HOUR = 60 * 60;
+  const unlockTime = Math.floor(Date.now() / 1000) + ONE_HOUR;
 
-  const balance = await hre.ethers.provider.getBalance(deployer.address);
-  console.log("Deployer balance:", hre.ethers.formatEther(balance), "ETH");
+  const lockedAmount = ethers.parseEther("0.01"); // 部署时锁定 0.01 ETH
 
-  const SecureVault = await hre.ethers.getContractFactory("SecureVault");
-  const vault = await SecureVault.deploy();
+  const Lock = await ethers.getContractFactory("Lock");
+  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
 
-  await vault.waitForDeployment();
-  console.log("SecureVault deployed to:", await vault.getAddress());
+  // ethers v6 等待部署
+  await lock.waitForDeployment();
 
-  const unlockTime = await vault.unlockTime();
-  console.log("Unlock time (timestamp):", unlockTime.toString());
-  console.log("Unlocks at:", new Date(Number(unlockTime) * 1000).toISOString());
+  console.log(`✅ Lock deployed to: ${await lock.getAddress()}`);
+  console.log(`Unlock timestamp: ${unlockTime}`);
 }
 
 main().catch((error) => {
