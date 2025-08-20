@@ -3,6 +3,7 @@ const hre = require("hardhat");
 
 async function main() {
   const vaultAddress = process.env.CONTRACT_ADDRESS;
+  const tokenContractAddress = process.env.TOKEN_CONTRACT_ADDRESS;
   if (!vaultAddress) {
     console.error("Please set CONTRACT_ADDRESS in your .env file");
     process.exit(1);
@@ -13,7 +14,7 @@ async function main() {
   try {
     await hre.run("verify:verify", {
       address: vaultAddress,
-      constructorArguments: [], // Vault 构造函数没有参数
+      constructorArguments: [tokenContractAddress],
     });
     console.log("Verification successful!");
   } catch (err) {
