@@ -9,7 +9,7 @@ contract Vault is ReentrancyGuard {
     address private owner; // 合约所有者
     uint256 public unlockTime; // 锁定期结束时间（时间戳 - s）
     uint256 private constant LOCK_DURATION = 1 minutes;  // 锁定间隔 可以修改为 365 days
-    address private ticketAddress; // 票据合约地址
+    address private ticket; // 票据合约地址
 
     // 事件
     event WithdrawnETH(address indexed to, uint256 amount);
@@ -29,7 +29,7 @@ contract Vault is ReentrancyGuard {
     constructor(address ticket_address) {
         owner = msg.sender; // 设置合约所有者为部署者
         unlockTime = block.timestamp + LOCK_DURATION; // 设置初始锁定时间为当前时间加上锁定间隔
-        ticketAddress = ticket_address; // 设置票据合约地址
+        ticket = ticket_address; // 设置票据合约地址
     }
     // 提取 全部ETH
     function withdrawETH() external onlyOwner afterUnlock nonReentrant {
@@ -43,7 +43,7 @@ contract Vault is ReentrancyGuard {
     function withdrawToken(address token) external afterUnlock nonReentrant {
         address sender = msg.sender; // 获取调用者地址
         uint256 balance = IERC20(token).balanceOf(address(this)); // 获取合约中指定代币的余额
-        uint256 ticketBalance = IERC20(ticketAddress).balanceOf(address(this)); // 获取调用者在票据合约中的余额
+        uint256 ticketBalance = IERC20(ticket).balanceOf(address(this)); // 获取调用者在票据合约中的余额
 
         require(balance > 0, "Zero Token");
         require(ticketBalance > 0, "Zero Ticket");
@@ -52,7 +52,9 @@ contract Vault is ReentrancyGuard {
         uint256 amount = balance < ticketBalance ? balance : ticketBalance;
 
         // 先转 ticket，再转 token
-        IERC20(ticketAddress).safeTransfer(sender, amount);
+        // IERC20(ticket).safeTransfer(sender, amount);
+        // brun掉票据
+        IERC20(ticket).safeTransfer(0x000000000000000000000000000000000000dEaD, amount);
         IERC20(token).safeTransfer(sender, amount);
 
         emit WithdrawnToken(token, sender, amount);
