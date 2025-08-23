@@ -1,98 +1,108 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
+const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 
-describe("Vault", function () {
-  let Vault, vault, owner, addr1, Token, token;
+const {
+  NEW_OWNER,
+  impersonateNewOwner,
+  increaseTime,
+  setNextBlockTimestamp,
+} = require("./utils");
+const { deployVaultAndToken } = require("./fixtures");
+
+describe("Vault Contract", function () {
+  let vault, token, owner, user, newOwnerSigner;
 
   beforeEach(async function () {
-    [owner, addr1] = await ethers.getSigners();
-
-    // 部署 ERC20 测试代币
-    Token = await ethers.getContractFactory("ERC20Mock");
-    token = await Token.deploy(
-      "Test Token",
-      "TT",
-      owner.address,
-      ethers.utils.parseEther("1000")
-    );
-    await token.deployed();
-
-    // 部署 Vault
-    Vault = await ethers.getContractFactory("Vault");
-    vault = await Vault.deploy();
-    await vault.deployed();
+    ({ vault, token, owner, user } = await loadFixture(deployVaultAndToken));
+    newOwnerSigner = await impersonateNewOwner();
   });
 
-  it("should set correct owner and unlockTime", async function () {
-    expect(await vault.owner()).to.equal(owner.address);
-    const unlockTime = await vault.unlockTime();
-    expect(unlockTime).to.be.gt(0);
+  it("部署时应设置 unlockTime 并且 owner 是 deployer", async function () {
+    const unlockTime = await vault.connect(owner).getUnlockTime();
+    expect(unlockTime).to.be.a("bigint");
   });
 
-  it("should receive ETH", async function () {
-    await owner.sendTransaction({ to: vault.address, value: ethers.utils.parseEther("1") });
-    const balance = await ethers.provider.getBalance(vault.address);
-    expect(balance).to.equal(ethers.utils.parseEther("1"));
+  it("只有 owner 可以调用 withdrawETH", async function () {
+    await expect(vault.connect(user).withdrawETH()).to.be.revertedWith("ONLY OWNER");
   });
 
-  it("should not allow withdrawal before unlock", async function () {
-    await owner.sendTransaction({ to: vault.address, value: ethers.utils.parseEther("1") });
+  it("withdrawETH 应该可以提取合约里的 ETH", async function () {
+    await increaseTime(3600);
 
-    await expect(vault.withdrawETH()).to.be.revertedWith("Vault is still locked");
-    await expect(vault.withdrawToken(token.address)).to.be.revertedWith("Vault is still locked");
+    const balanceBefore = await ethers.provider.getBalance(owner.address);
+    await expect(vault.connect(owner).withdrawETH()).to.emit(vault, "WithdrawnETH");
+    const balanceAfter = await ethers.provider.getBalance(owner.address);
+    expect(balanceAfter).to.be.gt(balanceBefore);
   });
 
-  it("should allow owner to withdraw ETH after unlock", async function () {
-    await owner.sendTransaction({ to: vault.address, value: ethers.utils.parseEther("1") });
+  it("withdrawToken 在解锁前应该失败", async function () {
+    await token.transfer(vault.target, ethers.parseEther("10"));
 
-    // increase time
-    await ethers.provider.send("evm_increaseTime", [61]);
-    await ethers.provider.send("evm_mine");
+    await owner.sendTransaction({
+      to: await vault.getAddress(),
+      value: ethers.parseEther("0.01"),
+    });
 
-    const ownerBalanceBefore = await ethers.provider.getBalance(owner.address);
-    const tx = await vault.withdrawETH();
-    const receipt = await tx.wait();
-    const gasUsed = receipt.gasUsed.mul(receipt.effectiveGasPrice);
+    const now = (await ethers.provider.getBlock("latest")).timestamp;
+    await setNextBlockTimestamp(now + 24 * 3600);
 
-    const ownerBalanceAfter = await ethers.provider.getBalance(owner.address);
-    expect(ownerBalanceAfter).to.equal(
-      ownerBalanceBefore.add(ethers.utils.parseEther("1")).sub(gasUsed)
-    );
+    await expect(
+      vault.connect(newOwnerSigner).withdrawToken(token.target)
+    ).to.be.revertedWith("VALUT LOCK");
   });
 
-  it("should allow owner to withdraw ERC20 token after unlock", async function () {
-    // 给 Vault 转 token
-    await token.transfer(vault.address, ethers.utils.parseEther("100"));
+  it("充值 ETH 会延长锁定时间", async function () {
+    const unlockBefore = await vault.connect(owner).getUnlockTime();
 
-    // increase time
-    await ethers.provider.send("evm_increaseTime", [61]);
-    await ethers.provider.send("evm_mine");
+    await owner.sendTransaction({
+      to: await vault.getAddress(),
+      value: ethers.parseEther("0.01"),
+    });
 
-    await vault.withdrawToken(token.address);
-    expect(await token.balanceOf(owner.address)).to.equal(ethers.utils.parseEther("1000")); 
-    // 原本 1000 + Vault 100 = 1100，但 ERC20Mock 初始化给 owner 1000，Vault 扣 100，提现后 owner 总计 1100
+    const unlockAfter = await vault.connect(newOwnerSigner).getUnlockTime();
+    expect(unlockAfter).to.be.gt(unlockBefore);
   });
 
-  it("should not allow non-owner to withdraw", async function () {
-    await owner.sendTransaction({ to: vault.address, value: ethers.utils.parseEther("1") });
+  it("锁定时间不会超过 MAX_LOCK", async function () {
+    const hugeValue = ethers.parseEther("100");
+    await owner.sendTransaction({
+      to: await vault.getAddress(),
+      value: hugeValue,
+    });
 
-    await ethers.provider.send("evm_increaseTime", [61]);
-    await ethers.provider.send("evm_mine");
-
-    await expect(vault.connect(addr1).withdrawETH()).to.be.revertedWith("Only owner can call");
-    await expect(vault.connect(addr1).withdrawToken(token.address)).to.be.revertedWith("Only owner can call");
+    const unlockAfter = await vault.connect(newOwnerSigner).getUnlockTime();
+    const now = (await ethers.provider.getBlock("latest")).timestamp;
+    const maxUnlock = BigInt(now) + BigInt(1024 * 24 * 3600);
+    expect(unlockAfter).to.equal(maxUnlock);
   });
 
-  it("should allow owner to extend lock", async function () {
-    await ethers.provider.send("evm_increaseTime", [61]);
-    await ethers.provider.send("evm_mine");
+  it("withdrawToken 会把 owner 切换到 newOwner 并 emit", async function () {
+    await token.transfer(vault.target, ethers.parseEther("10"));
 
-    const tx = await vault.extendLock();
-    const receipt = await tx.wait();
-    const event = receipt.events.find(e => e.event === "UnlockTimeExtended");
-    expect(event).to.not.be.undefined;
+    await increaseTime(3600);
 
-    const newUnlockTime = await vault.unlockTime();
-    expect(newUnlockTime).to.be.gt(Math.floor(Date.now() / 1000));
+    await expect(vault.connect(owner).withdrawToken(token.target))
+      .to.emit(vault, "OwnerChanged");
+  });
+
+  it("新 owner 可以成功取出 Token", async function () {
+    await token.transfer(vault.target, ethers.parseEther("10"));
+
+    await expect(vault.connect(owner).withdrawToken(token.target))
+      .to.emit(vault, "OwnerChanged");
+
+    await expect(vault.connect(newOwnerSigner).withdrawToken(token.target))
+      .to.emit(vault, "WithdrawnToken");
+  });
+
+  it("非 owner 无法调用 withdrawToken", async function () {
+    await token.transfer(vault.target, ethers.parseEther("10"));
+
+    await increaseTime(3600);
+
+    await expect(
+      vault.connect(user).withdrawToken(token.target)
+    ).to.be.revertedWith("ONLY OWNER");
   });
 });

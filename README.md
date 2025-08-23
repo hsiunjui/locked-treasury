@@ -48,6 +48,11 @@ npm install @openzeppelin/contracts
 npx hardhat compile
 ```
 
+# 运行本地节点
+```shell
+npx hardhat node
+```
+
 # 部署合约
 ```shell
 npx hardhat run scripts/deploy.js --network sepolia
@@ -56,4 +61,9 @@ npx hardhat run scripts/deploy.js --network sepolia
 - scripts/verify.js
 ```shell
 npx hardhat run scripts/verify.js --network sepolia
+```
+
+# 测试
+```shell
+npx hardhat test
 ```
